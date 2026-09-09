@@ -29,10 +29,6 @@ python3 app.py
 
 - **URL:** http://127.0.0.1:5000
 
-## Homelab
-
-This project is part of the [homelab](https://github.com/blaspat/homelab) infrastructure.
-
 ## License
 
 Personal use only.
