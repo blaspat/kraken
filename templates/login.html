@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kraken — Login</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3; --dim:#8b949e; --accent:#2f81f7; --red:#f85149; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:36px 40px; width:340px; text-align:center; }
+  h1 { font-size:22px; margin:0 0 6px; }
+  .sub { color:var(--dim); font-size:13px; margin:0 0 24px; }
+  input[type=password] { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:11px 12px; font-size:15px; margin-bottom:14px; }
+  button { width:100%; background:var(--accent); border:none; color:#fff; border-radius:6px; padding:11px; font-size:15px; cursor:pointer; }
+  button:hover { filter:brightness(1.1); }
+  .err { color:var(--red); font-size:13px; margin-bottom:12px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🐙 Kraken</h1>
+  <p class="sub">Private access — enter the password</p>
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
+  <form method="post" action="/login">
+    <input type="password" name="password" placeholder="Password" autofocus autocomplete="current-password">
+    <button type="submit">Unlock</button>
+  </form>
+</div>
+</body>
+</html>
