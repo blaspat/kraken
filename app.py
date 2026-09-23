@@ -260,4 +260,5 @@ def status():
 
 if __name__ == "__main__":
     # Loopback only — nginx (tpb.spica.ooguy.com) terminates TLS and proxies here.
-    app.run(host="127.0.0.1", port=8098, debug=False)
+    port = int(CONFIG.get("port", 8098))
+    app.run(host="127.0.0.1", port=port, debug=False)
