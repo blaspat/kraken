@@ -25,9 +25,25 @@ pip3 install -r requirements.txt
 python3 app.py
 ```
 
+## Configuration
+
+`config.json` (untracked by git):
+
+```json
+{
+  "password": "…login password…",
+  "secret_key": "…Flask session secret…",
+  "port": 8098,
+  "default_dir": "~/Downloads",
+  "download_dirs": ["~/Downloads"]
+}
+```
+
+`port` is optional and defaults to `8098` if omitted.
+
 ## Access
 
-- **URL:** http://127.0.0.1:5000
+- **URL:** `http://127.0.0.1:<port>` — port from `config.json` (default **8098**)
 
 ## Homelab
 
