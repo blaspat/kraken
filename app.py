@@ -69,6 +69,61 @@ def human_size(n):
     return f"{n:.1f} PB"
 
 
+# Torrent ids we already tried to re-adopt since process start: one walk, no retries.
+_TRIED_ADOPT = set()
+
+
+def _find_named(filename, roots):
+    """Exact basename match anywhere under one of the roots, first hit wins."""
+    for root in roots:
+        if not root or not os.path.isdir(root):
+            continue
+        for dirpath, _dirs, files in os.walk(root):
+            if filename in files:
+                return dirpath
+    return None
+
+
+def adopt_orphans(torrents):
+    """Self-heal the 'No data found' class of errors.
+
+    The files were downloaded fine — then someone organized them into the
+    library, so Transmission's download-dir points at empty space. Search the
+    configured roots for the exact filenames; when every file lives in one new
+    dir, re-point the torrent there and re-verify instead of erroring forever.
+    Data that is genuinely gone is left as an error (correctly).
+    """
+    fixed = False
+    roots = [os.path.expanduser(d) for d in CONFIG.get("download_dirs", [])]
+    for t in torrents:
+        if not str(t.get("errorString") or "").startswith("No data found"):
+            continue
+        if t.get("id") in _TRIED_ADOPT:
+            continue
+        _TRIED_ADOPT.add(t.get("id"))
+        files = t.get("files") or []
+        if not files:
+            continue
+        locs = set()
+        for f in files:
+            hit = _find_named(os.path.basename(f.get("name") or ""), roots)
+            if hit is None:
+                locs = None
+                break
+            locs.add(hit)
+        if not locs or len(locs) != 1:
+            continue
+        loc = locs.pop()
+        # only adopt when the exact path Transmission will check resolves there
+        if not all(os.path.exists(os.path.join(loc, f["name"])) for f in files):
+            continue
+        if loc != t.get("downloadDir"):
+            tr_rpc("torrent-set-location", {"ids": [t["id"]], "location": loc, "move": False})
+        tr_rpc("torrent-verify", {"ids": [t["id"]]})
+        fixed = True
+    return fixed
+
+
 STATUS_NAMES = {
     0: "Stopped", 1: "Check wait", 2: "Checking", 3: "Download wait",
     4: "Downloading", 5: "Seed wait", 6: "Seeding",
@@ -236,12 +291,16 @@ def download():
 
 @app.get("/api/status")
 def status():
-    out = tr_rpc("torrent-get", {
-        "fields": ["id", "name", "status", "percentDone", "rateDownload",
-                   "rateUpload", "downloadDir", "errorString", "eta"],
-    })
+    fields = ["id", "name", "status", "percentDone", "rateDownload",
+              "rateUpload", "downloadDir", "errorString", "eta", "error", "files"]
+    out = tr_rpc("torrent-get", {"fields": fields})
     if out.get("result") != "success":
         return jsonify({"error": out.get("result", "rpc error"), "torrents": []}), 502
+    # data moved after download => re-point it once; if anything healed, re-read
+    if adopt_orphans(out.get("arguments", {}).get("torrents", [])):
+        out = tr_rpc("torrent-get", {"fields": fields})
+        if out.get("result") != "success":
+            return jsonify({"error": out.get("result", "rpc error"), "torrents": []}), 502
     torrents = []
     for t in out.get("arguments", {}).get("torrents", []):
         torrents.append({
