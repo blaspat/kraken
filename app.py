@@ -7,13 +7,22 @@ import time
 import threading
 import requests
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
-from trackers import DEFAULT_TRACKERS, append_trackers
+from trackers import DEFAULT_TRACKERS, append_trackers, pool_loop
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = json.load(open(os.path.join(BASE, "config.json")))
 
 app = Flask(__name__)
 app.secret_key = CONFIG.get("secret_key")
+
+# Tracker-pool maintenance (was the standalone apps/tracker-pool cron):
+# first pass now, then every 6h in a background thread.
+threading.Thread(
+    target=pool_loop,
+    args=(CONFIG, os.path.join(BASE, "config.json")),
+    name="tracker-pool",
+    daemon=True,
+).start()
 
 # --- login rate limiting (in-memory) ---
 # Tracks failed attempts per client IP. Progressive lockout: each lockout window
