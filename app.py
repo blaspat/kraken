@@ -7,6 +7,7 @@ import time
 import threading
 import requests
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+from trackers import DEFAULT_TRACKERS, append_trackers
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = json.load(open(os.path.join(BASE, "config.json")))
@@ -269,6 +270,8 @@ def download():
     magnet = (body.get("magnet") or "").strip()
     if not magnet:
         return jsonify({"error": "missing magnet"}), 400
+
+    magnet = append_trackers(magnet, CONFIG.get("trackers") or DEFAULT_TRACKERS)
 
     args = {"filename": magnet, "paused": False}
     dl_dir = (body.get("dir") or CONFIG.get("default_dir", "")).strip()
