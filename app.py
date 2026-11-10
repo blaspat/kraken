@@ -7,7 +7,7 @@ import time
 import threading
 import requests
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
-from trackers import DEFAULT_TRACKERS, append_trackers, pool_loop
+from trackers import DEFAULT_TRACKERS, append_trackers, maintain_pool, pool_loop
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = json.load(open(os.path.join(BASE, "config.json")))
@@ -328,10 +328,28 @@ def torrent_control():
     return jsonify(out)
 
 
+_pool_lock = threading.Lock()
+
+
+@app.post("/api/tracker-pool/refresh")
+def tracker_pool_refresh():
+    """Run one tracker-pool maintenance pass synchronously."""
+    if not _pool_lock.acquire(blocking=False):
+        return jsonify({"error": "refresh already running"}), 409
+    try:
+        lines = maintain_pool(CONFIG, os.path.join(BASE, "config.json"))
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"error": str(e)}), 502
+    finally:
+        _pool_lock.release()
+    return jsonify({"result": "success", "lines": lines})
+
+
 @app.get("/api/status")
 def status():
     fields = ["id", "name", "status", "percentDone", "rateDownload",
-              "rateUpload", "downloadDir", "errorString", "eta", "error", "files"]
+              "rateUpload", "downloadDir", "errorString", "eta", "error", "files",
+              "seeders", "leechers", "uploadedEver"]
     out = tr_rpc("torrent-get", {"fields": fields})
     if out.get("result") != "success":
         return jsonify({"error": out.get("result", "rpc error"), "torrents": []}), 502
@@ -349,6 +367,9 @@ def status():
             "percent": round((t.get("percentDone") or 0) * 100, 1),
             "down": t.get("rateDownload") or 0,
             "up": t.get("rateUpload") or 0,
+            "seeders": t.get("seeders") or 0,
+            "leechers": t.get("leechers") or 0,
+            "uploaded": t.get("uploadedEver") or 0,
             "dir": t.get("downloadDir"),
             "error": t.get("errorString") or "",
             "eta": t.get("eta"),

@@ -32,6 +32,8 @@
   .magnet { font-size:12px; color:var(--dim); margin-top:6px; word-break:break-all; }
   .panel { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px; margin-top:28px; }
   .panel h2 { margin:0 0 12px; font-size:16px; }
+  .panelhead { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+  .panelhead h2 { margin:0; }
   .trow { display:flex; align-items:center; gap:14px; padding:8px 0; border-bottom:1px solid var(--border); }
   .trow:last-child { border-bottom:none; }
   .tname { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -65,7 +67,10 @@
   <div class="statusline" id="status"></div>
   <div id="results"></div>
   <div class="panel">
-    <h2>Active Downloads</h2>
+    <div class="panelhead">
+      <h2>Active Downloads</h2>
+      <button id="rtbtn" class="dlbtn">Refresh trackers</button>
+    </div>
     <div id="active"><div class="sub">Transmission status…</div></div>
   </div>
 </div>
@@ -156,6 +161,7 @@ async function refresh(){
         </div>
         <div class="tstat">
           <div>${esc(t.status)}</div>
+          <div style="font-size:12px;color:var(--dim)">S ${t.seeders} / L ${t.leechers} · ↑ ${fmtBytes(t.uploaded)}</div>
           <div style="font-size:12px;color:var(--dim)">↓ ${fmtBytes(t.down)}/s</div>
         </div>
         <div class="tacts">
@@ -184,6 +190,20 @@ async function torrentAction(action, id, btn){
 active.addEventListener('click', e => {
   const b = e.target.closest('button[data-act]');
   if(b) torrentAction(b.dataset.act, Number(b.dataset.id), b);
+});
+
+document.getElementById('rtbtn').addEventListener('click', async e => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  status.textContent = 'Refreshing trackers…';
+  try{
+    const r = await fetch('/api/tracker-pool/refresh', {method:'POST'});
+    if(r.status === 401){ window.location = '/login'; return; }
+    const d = await r.json();
+    status.textContent = d.error ? 'Error: '+d.error : (d.lines?.[0] || 'Trackers refreshed.');
+    await refresh();
+  }catch(err){ status.textContent = 'Error: '+err.message; }
+  finally{ btn.disabled = false; }
 });
 
 go.addEventListener('click', search);
