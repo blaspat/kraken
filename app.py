@@ -7,7 +7,7 @@ import time
 import threading
 import requests
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
-from trackers import DEFAULT_TRACKERS, append_trackers, maintain_pool, pool_loop
+from trackers import DEFAULT_TRACKERS, append_trackers, maintain_pool, pool_loop, POOL_LOCK
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = json.load(open(os.path.join(BASE, "config.json")))
@@ -328,20 +328,21 @@ def torrent_control():
     return jsonify(out)
 
 
-_pool_lock = threading.Lock()
-
-
 @app.post("/api/tracker-pool/refresh")
 def tracker_pool_refresh():
-    """Run one tracker-pool maintenance pass synchronously."""
-    if not _pool_lock.acquire(blocking=False):
-        return jsonify({"error": "refresh already running"}), 409
+    """Run one tracker-pool maintenance pass synchronously.
+
+    Shares POOL_LOCK with the 6h background pool_loop, so a manual refresh
+    and an automated pass can never run at the same time (409 if one is).
+    """
+    if not POOL_LOCK.acquire(blocking=False):
+        return jsonify({"error": "tracker-pool pass already running"}), 409
     try:
         lines = maintain_pool(CONFIG, os.path.join(BASE, "config.json"))
     except Exception as e:  # noqa: BLE001
         return jsonify({"error": str(e)}), 502
     finally:
-        _pool_lock.release()
+        POOL_LOCK.release()
     return jsonify({"result": "success", "lines": lines})
 
 
