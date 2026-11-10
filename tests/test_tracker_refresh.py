@@ -79,12 +79,12 @@ class TrackerRefreshTests(unittest.TestCase):
         self.assertEqual(r.get_json()["error"], "boom")
 
     def test_refresh_already_running_is_409(self):
-        acquired = kraken._pool_lock.acquire(blocking=False)
+        acquired = kraken.POOL_LOCK.acquire(blocking=False)
         self.assertTrue(acquired)
         try:
             r = self.client.post("/api/tracker-pool/refresh")
         finally:
-            kraken._pool_lock.release()
+            kraken.POOL_LOCK.release()
         self.assertEqual(r.status_code, 409)
         self.refresh.assert_not_called()
 
