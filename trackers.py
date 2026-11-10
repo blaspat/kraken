@@ -17,6 +17,7 @@ import shutil
 import socket
 import ssl
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -33,6 +34,10 @@ DEFAULT_TRACKERS = [
 DAEMON_DIR = "/home/patrick/.config/transmission-daemon"
 RPC = "http://127.0.0.1:9091/transmission/rpc"
 POOL_INTERVAL_S = 6 * 3600
+
+# Shared lock: serializes the background pool_loop with any on-demand refresh
+# (POST /api/tracker-pool/refresh) so two maintain_pool passes never overlap.
+POOL_LOCK = threading.Lock()
 
 # Candidate pool. TCP-checked entries: (host, port, use_tls, announce_url).
 CANDIDATES = [
@@ -162,8 +167,9 @@ def pool_loop(config, config_path, interval_s=POOL_INTERVAL_S):
     """Run maintain_pool now, then every `interval_s` (background thread body)."""
     while True:
         try:
-            for line in maintain_pool(config, config_path):
-                print(f"[tracker-pool] {line}", flush=True)
+            with POOL_LOCK:
+                for line in maintain_pool(config, config_path):
+                    print(f"[tracker-pool] {line}", flush=True)
         except Exception as e:
             print(f"[tracker-pool] pass failed: {e}", flush=True)
         time.sleep(interval_s)
