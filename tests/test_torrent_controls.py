@@ -1,4 +1,6 @@
 """Unit tests for /api/torrent controls. Runnable with plain python3 (no pytest)."""
+import atexit
+import json
 import os
 import sys
 import unittest
@@ -6,6 +8,12 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["KRAKEN_NO_BG"] = "1"  # do not start the tracker-pool thread on import
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_cfg = os.path.join(_REPO_ROOT, "config.json")
+if not os.path.exists(_cfg):  # clean checkouts: app.py needs config.json at import
+    with open(_cfg, "w") as _f:
+        json.dump({"port": 8098, "secret_key": "test-secret"}, _f)
+    atexit.register(os.remove, _cfg)
 
 import app as kraken  # noqa: E402
 
