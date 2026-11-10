@@ -17,12 +17,13 @@ app.secret_key = CONFIG.get("secret_key")
 
 # Tracker-pool maintenance (was the standalone apps/tracker-pool cron):
 # first pass now, then every 6h in a background thread.
-threading.Thread(
-    target=pool_loop,
-    args=(CONFIG, os.path.join(BASE, "config.json")),
-    name="tracker-pool",
-    daemon=True,
-).start()
+if os.environ.get("KRAKEN_NO_BG") != "1":  # tests import this module; no side effects
+    threading.Thread(
+        target=pool_loop,
+        args=(CONFIG, os.path.join(BASE, "config.json")),
+        name="tracker-pool",
+        daemon=True,
+    ).start()
 
 # --- login rate limiting (in-memory) ---
 # Tracks failed attempts per client IP. Progressive lockout: each lockout window
@@ -299,6 +300,32 @@ def download():
     dup = out.get("arguments", {}).get("torrent-duplicate", {}) or {}
     info = added or dup
     return jsonify({"ok": True, "id": info.get("id"), "name": info.get("name", ""), "dir": dl_dir})
+
+
+@app.post("/api/torrent")
+def torrent_control():
+    body = request.get_json(force=True, silent=True) or {}
+    action = body.get("action")
+    tid = body.get("id")
+    if action not in ("pause", "resume", "delete"):
+        return jsonify({"error": "unknown action"}), 400
+    if not isinstance(tid, int) or isinstance(tid, bool):
+        return jsonify({"error": "id must be an integer"}), 400
+
+    if action == "delete":
+        method = "torrent-remove"
+        args = {"ids": [tid], "delete-local-data": body.get("with_files") is True}
+    else:
+        method = "torrent-set"
+        args = {"ids": [tid], "paused": action == "pause"}
+
+    try:
+        out = tr_rpc(method, args)
+    except requests.RequestException as e:
+        return jsonify({"error": f"transmission unreachable: {e}"}), 502
+    if out.get("result") != "success":
+        return jsonify({"error": out.get("result") or "transmission error"}), 502
+    return jsonify(out)
 
 
 @app.get("/api/status")
